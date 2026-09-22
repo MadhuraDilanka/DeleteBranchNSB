@@ -266,8 +266,8 @@ public partial class Form1 : Form
                         CommandTimeout = 120
                     };
                     // Both parameters carry the same DocumentID as confirmed in spec.
-                    spCmd.Parameters.AddWithValue("@documentID", docId);
-                    spCmd.Parameters.AddWithValue("@DocumentID", docId);
+                    spCmd.Parameters.AddWithValue("@docID_FROM", docId);
+                    spCmd.Parameters.AddWithValue("@docID_TO", docId);
 
                     await spCmd.ExecuteNonQueryAsync();
                     Log($"   ✅ Deleted: {docId}  [{libName}]");
