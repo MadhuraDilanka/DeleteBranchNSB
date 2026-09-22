@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37614.0 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeleteBranchNSB", "DeleteBranchNSB.csproj", "{18D2823E-E546-9632-2A82-791B9DE2A1FE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{18D2823E-E546-9632-2A82-791B9DE2A1FE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{18D2823E-E546-9632-2A82-791B9DE2A1FE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{18D2823E-E546-9632-2A82-791B9DE2A1FE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{18D2823E-E546-9632-2A82-791B9DE2A1FE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4AAE546A-2326-4A8E-A31A-4ABC60A49E6E}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,24 @@
+# Delete Branch NSB — .gitignore
+
+# Build output
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet
+*.nupkg
+packages/
+.nuget/
+
+# Rider / JetBrains
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
