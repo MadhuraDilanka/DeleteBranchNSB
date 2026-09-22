@@ -177,21 +177,25 @@ public partial class Form1 : Form
     private async Task DeleteDocumentsAsync(string connStr, string branch)
     {
         var libraries = clbLibraries.CheckedItems.Cast<LibraryItem>().ToList();
-
-        int totalLibs    = libraries.Count;
-        int processedLibs = 0;
-        int totalDeleted  = 0;
-        int totalErrors   = 0;
+        int totalLibs   = libraries.Count;
+        int totalDeleted = 0;
+        int totalErrors  = 0;
 
         await using var conn = new SqlConnection(connStr);
         await conn.OpenAsync();
 
+        // ── Phase 1 (0 → 50%): Collect all DocumentIDs ────────────────────────
+        Log("📋 Phase 1/2 — Collecting document IDs...");
+
+        // workList holds (LibraryName, DocumentID) for every document to delete
+        var workList = new List<(string LibName, string DocId)>();
+        int processedLibs = 0;
+
         foreach (var lib in libraries)
         {
             Log($"\n📚 Library: [{lib.Name}]");
-            tsslStatus.Text = $"Processing: {lib.Name}";
+            tsslStatus.Text = $"Scanning: {lib.Name}";
 
-            // Parse the comma/newline/whitespace-separated GUIDs stored in IndexDataTable
             var guids = lib.IndexDataTable
                            .Split(new[] { ',', '\n', '\r', '\t', ' ' },
                                   StringSplitOptions.RemoveEmptyEntries)
@@ -201,78 +205,100 @@ public partial class Form1 : Form
                            .ToList();
 
             if (guids.Count == 0)
-            {
                 Log("   ⚠️  No index tables found in IndexDataTable.");
-            }
 
             foreach (var guid in guids)
             {
                 Log($"   🔍 Index table: [{guid}]");
-
-                // ── Fetch DocumentIDs from the dynamic GUID-named table ──────
-                List<string> documentIDs = new();
                 try
                 {
-                    // NOTE: The table name comes from the database (IndexDataTable column),
-                    //       so it is not user-supplied input — bracket-quoting prevents
-                    //       accidental SQL issues with special characters in the GUID.
+                    // NOTE: table name comes from the database, not user input.
                     string selectSql = $"SELECT DocumentID FROM [{guid}] WHERE [Branch] = @branch";
                     await using var selCmd = new SqlCommand(selectSql, conn);
                     selCmd.Parameters.AddWithValue("@branch", branch);
                     selCmd.CommandTimeout = 60;
 
+                    int found = 0;
                     await using var reader = await selCmd.ExecuteReaderAsync();
                     while (await reader.ReadAsync())
                     {
                         if (!reader.IsDBNull(0))
-                            documentIDs.Add(reader.GetValue(0).ToString()!);
+                        {
+                            workList.Add((lib.Name, reader.GetValue(0).ToString()!));
+                            found++;
+                        }
                     }
+                    Log($"      Found {found} document(s)");
                 }
                 catch (Exception ex)
                 {
                     Log($"   ⚠️  Cannot read [{guid}]: {ex.Message}");
                     totalErrors++;
-                    continue;
-                }
-
-                Log($"      Found {documentIDs.Count} document(s)");
-
-                // ── Call deleteDocument SP for each DocumentID ───────────────
-                foreach (var docId in documentIDs)
-                {
-                    try
-                    {
-                        await using var spCmd = new SqlCommand("[dbo].[deleteDocument]", conn)
-                        {
-                            CommandType    = CommandType.StoredProcedure,
-                            CommandTimeout = 120
-                        };
-
-                        // The SP takes two parameters both carrying the document ID.
-                        // Adjust names/types here if the SP signature differs.
-                        spCmd.Parameters.AddWithValue("@docID_FROM", docId);
-                        spCmd.Parameters.AddWithValue("@docID_TO", docId);
-
-                        await spCmd.ExecuteNonQueryAsync();
-                        Log($"      ✅ Deleted: {docId}");
-                        totalDeleted++;
-                    }
-                    catch (Exception ex)
-                    {
-                        Log($"      ❌ Failed [{docId}]: {ex.Message}");
-                        totalErrors++;
-                    }
                 }
             }
 
             processedLibs++;
-            pbProgress.Value = (int)((double)processedLibs / totalLibs * 100);
+            // Phase 1 occupies 0–50% of the bar
+            SetProgress((int)(50.0 * processedLibs / totalLibs));
+        }
+
+        // ── Phase 2 (50 → 100%): Delete each document ─────────────────────────
+        int totalDocs = workList.Count;
+        Log($"\n🗑  Phase 2/2 — Deleting {totalDocs} document(s)...");
+
+        if (totalDocs == 0)
+        {
+            Log("   ℹ️  No documents found for the selected branch and libraries.");
+            SetProgress(100);
+        }
+        else
+        {
+            int deletedSoFar = 0;
+
+            foreach (var (libName, docId) in workList)
+            {
+                tsslStatus.Text = $"Deleting {deletedSoFar + 1}/{totalDocs}...";
+                try
+                {
+                    await using var spCmd = new SqlCommand("[dbo].[deleteDocument]", conn)
+                    {
+                        CommandType    = CommandType.StoredProcedure,
+                        CommandTimeout = 120
+                    };
+                    // Both parameters carry the same DocumentID as confirmed in spec.
+                    spCmd.Parameters.AddWithValue("@documentID", docId);
+                    spCmd.Parameters.AddWithValue("@DocumentID", docId);
+
+                    await spCmd.ExecuteNonQueryAsync();
+                    Log($"   ✅ Deleted: {docId}  [{libName}]");
+                    totalDeleted++;
+                }
+                catch (Exception ex)
+                {
+                    Log($"   ❌ Failed [{docId}]: {ex.Message}");
+                    totalErrors++;
+                }
+
+                deletedSoFar++;
+                // Phase 2 occupies 50–100% of the bar
+                SetProgress(50 + (int)(50.0 * deletedSoFar / totalDocs));
+            }
         }
 
         Log($"\n─────────────────────────────────────────────────────");
         Log($"📊 Summary — Deleted: {totalDeleted}  |  Errors: {totalErrors}");
         Log("─────────────────────────────────────────────────────");
         tsslStatus.Text = $"Done — {totalDeleted} deleted, {totalErrors} errors";
+    }
+
+    /// <summary>Thread-safe progress bar update (clamped 0–100).</summary>
+    private void SetProgress(int value)
+    {
+        int clamped = Math.Clamp(value, 0, 100);
+        if (pbProgress.InvokeRequired)
+            pbProgress.Invoke(() => pbProgress.Value = clamped);
+        else
+            pbProgress.Value = clamped;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
